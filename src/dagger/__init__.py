@@ -1,1 +1,1 @@
-from .dagger import DagBuilderBase, Dagger, Dagcorator
+from .dagger import DagBuilderBase, Dagger, DAGDecorator

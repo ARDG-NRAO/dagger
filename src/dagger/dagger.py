@@ -10,6 +10,9 @@ from typing import Optional
 import htcondor2
 from htcondor2 import dags
 
+# Module-level state for static decorator pattern
+_GLOBAL_DAG_INSTANCE: Optional["DAGDecorator"] = None
+
 
 class DagBuilderBase:
     """
@@ -447,26 +450,27 @@ class Dagger(DagBuilderBase):
         )
 
 
-class Dagcorator(DagBuilderBase):
+class DAGDecorator(DagBuilderBase):
     """
     Decorator-based DAG builder that provides the same functionality as Dagger
     but allows functions to be added to the DAG using Python decorators.
 
-    Usage:
-        dagcorator = Dagcorator(dag_dir="my_dag", dag_name="workflow")
+    Usage pattern:
+    >>> from dagger import DAGDecorator as dd
+    >>> @dd.initialize(dag_dir='my_dag', dag_name='workflow')
+    ... @dd.layer(layer_name='step1')
+    ... def process_data(input_file: str) -> str:
+    ...     # Function implementation
+    ...     return "processed_data.txt"
+    >>> @dd.layer(layer_name='step2', parent_layer_name='step1',
+    ...          layer_vars=[{"input": "data1.txt"}, {"input": "data2.txt"}])
+    ... def analyze_data(input: str) -> str:
+    ...     # Function implementation
+    ...     return "analysis_results.txt"
+    >>> dd.write_dag()
 
-        @dagcorator.layer(layer_name="step1")
-        def process_data(input_file: str) -> str:
-            # Function implementation
-            return "processed_data.txt"
-
-        @dagcorator.layer(layer_name="step2", parent_layer_name="step1",
-                         layer_vars=[{"input": "data1.txt"}, {"input": "data2.txt"}])
-        def analyze_data(input: str) -> str:
-            # Function implementation
-            return "analysis_results.txt"
-
-        dagcorator.write_dag()
+    This will create a DAG with two layers, where 'step2' depends on 'step1'.
+    It will also create the necessary Python scripts and submit files in the specified dag_dir.
     """
 
     def __init__(self, dag_dir: str, dag_name: str, overwrite_dag_dir: bool = False):
@@ -499,69 +503,6 @@ class Dagcorator(DagBuilderBase):
                 file_path = os.path.join(self.dag_dir, file)
                 if os.path.isfile(file_path):
                     os.remove(file_path)
-
-    def layer(
-        self,
-        layer_name: str = "",
-        parent_layer_name: str = "",
-        layer_vars: Optional[list[dict]] = None,
-        py_script_name: str = "",
-        submit_vars: Optional[dict] = None,
-        delimiter: Optional[str] = None,
-        **kwargs,
-    ):
-        """
-        Decorator to add a function to the DAG as a layer.
-
-        :param layer_name: Name of the layer. If not provided, uses function name.
-        :type layer_name: str
-        :param parent_layer_name: Name of parent layer for dependencies.
-        :type parent_layer_name: str
-        :param layer_vars: List of variable dictionaries for multiple jobs in this layer.
-        :type layer_vars: list[dict]
-        :param py_script_name: Custom name for the Python script file.
-        :type py_script_name: str
-        :param submit_vars: Additional variables for the submit script.
-        :type submit_vars: dict
-        :param delimiter: Optional delimiter for function source code wrapping.
-        :type delimiter: str
-        :param kwargs: Additional arguments for layer creation.
-        :return: Decorator function
-        :rtype: callable
-        """
-
-        def decorator(func: callable):
-            if not callable(func):
-                raise TypeError("Input must be a callable function.")
-
-            # Use provided layer name or default to function name
-            actual_layer_name = layer_name or func.__name__
-
-            # Create submit object using base class method
-            submit_obj = super(Dagcorator, self).function_to_submit_obj(
-                func=func,
-                dag_dir=self.dag_dir,
-                py_script_name=py_script_name,
-                submit_vars=submit_vars or {},
-                delimiter=delimiter,
-            )
-
-            # Create DAG layer using base class method
-            layer_obj = super(Dagcorator, self).dag_layer(
-                submit_obj=submit_obj,
-                submit_vars=layer_vars or [{}],
-                layer_name=actual_layer_name,
-                parent_layer_name=parent_layer_name,
-                **kwargs,
-            )
-
-            # Store the layer object as an attribute of the function
-            func._dag_layer = layer_obj
-
-            # Return the original function so it can still be called normally
-            return func
-
-        return decorator
 
     @property
     def submit_functions(self) -> dict:
@@ -603,20 +544,144 @@ class Dagcorator(DagBuilderBase):
         """
         return self._job_names
 
-    def write_dag(self, **kwargs) -> None:
+    # Static methods for global decorator pattern
+    @classmethod
+    def initialize(cls, dag_dir: str, dag_name: str, overwrite_dag_dir: bool = False):
         """
-        Write the current DAG to a file. This will create a .dag file that can be submitted to HTCondor.
+        Initialize the global DAGDecorator instance for static decorator usage.
+
+        This enables the usage pattern:
+        @DAGDecorator.initialize(dag_dir='my_dag', dag_name='workflow')
+        @DAGDecorator.layer(layer_name='layer1')
+        def func1():
+            pass
+
+        :param dag_dir: Directory where the DAG files, scripts, and submit files will be stored.
+        :type dag_dir: str
+        :param dag_name: Name of the DAG.
+        :type dag_name: str
+        :param overwrite_dag_dir: Whether to overwrite existing files in the DAG directory.
+        :type overwrite_dag_dir: bool
+        :return: Decorator function that returns the original function unchanged
+        :rtype: callable
+        """
+
+        def decorator(func: callable):
+            global _GLOBAL_DAG_INSTANCE
+            _GLOBAL_DAG_INSTANCE = cls(
+                dag_dir=dag_dir, dag_name=dag_name, overwrite_dag_dir=overwrite_dag_dir
+            )
+            return func
+
+        return decorator
+
+    @classmethod
+    def layer(
+        cls,
+        layer_name: str = "",
+        parent_layer_name: str = "",
+        layer_vars: Optional[list[dict]] = None,
+        py_script_name: str = "",
+        submit_vars: Optional[dict] = None,
+        delimiter: Optional[str] = None,
+        **kwargs,
+    ):
+        """
+        Static decorator to add a function to the global DAG as a layer.
+
+        Must be used after @DAGDecorator.initialize().
+
+        :param layer_name: Name of the layer. If not provided, uses function name.
+        :type layer_name: str
+        :param parent_layer_name: Name of parent layer for dependencies.
+        :type parent_layer_name: str
+        :param layer_vars: List of variable dictionaries for multiple jobs in this layer.
+        :type layer_vars: list[dict]
+        :param py_script_name: Custom name for the Python script file.
+        :type py_script_name: str
+        :param submit_vars: Additional variables for the submit script.
+        :type submit_vars: dict
+        :param delimiter: Optional delimiter for function source code wrapping.
+        :type delimiter: str
+        :param kwargs: Additional arguments for layer creation.
+        :return: Decorator function
+        :rtype: callable
+        :raises RuntimeError: If DAGDecorator.initialize() has not been called first.
+
+        :example:
+        >>> from dagger import DAGDecorator as dd
+        >>> @dd.initialize(dag_dir='my_dag', dag_name='workflow')
+        ... @dd.layer(layer_name='step1')
+        ... def process_data(input_file: str) -> str:
+        ...
+        ...
+        >>>     return "processed_data.txt"
+        >>> @dd.layer(layer_name='step2', parent_layer_name='step1',
+        ...          layer_vars=[{"input": "data1.txt"}, {"input": "data2.txt"}])
+        ... def analyze_data(input: str) -> str:
+        ...
+        >>>     return "analysis_results.txt"
+        >>> dd.write_dag()
+        """
+
+        def decorator(func: callable):
+            global _GLOBAL_DAG_INSTANCE
+            if _GLOBAL_DAG_INSTANCE is None:
+                raise RuntimeError(
+                    "DAGDecorator.initialize() must be called before using DAGDecorator.layer(). "
+                    "Use @DAGDecorator.initialize(dag_dir='...', dag_name='...') on a function first."
+                )
+
+            return _GLOBAL_DAG_INSTANCE.layer(
+                layer_name=layer_name,
+                parent_layer_name=parent_layer_name,
+                layer_vars=layer_vars,
+                py_script_name=py_script_name,
+                submit_vars=submit_vars,
+                delimiter=delimiter,
+                **kwargs,
+            )(func)
+
+        return decorator
+
+    @classmethod
+    def write_dag(cls, **kwargs) -> None:
+        """
+        Write the global DAG to a file using the static decorator pattern.
 
         :param kwargs: Keyword arguments to pass to the DAG writing function.
         :type kwargs: dict
         :return: None
+        :raises RuntimeError: If DAGDecorator.initialize() has not been called first.
         """
-        dags.write_dag(
-            self.dag,
-            dag_dir=self.dag_dir,
-            dag_file_name=f"{self.dag_name}.dag",
-            **kwargs,
-        )
+        global _GLOBAL_DAG_INSTANCE
+        if _GLOBAL_DAG_INSTANCE is None:
+            raise RuntimeError(
+                "DAGDecorator.initialize() must be called before using DAGDecorator.write_dag(). "
+                "Use @DAGDecorator.initialize(dag_dir='...', dag_name='...') on a function first."
+            )
+
+        _GLOBAL_DAG_INSTANCE.write_dag(**kwargs)
+
+    @classmethod
+    def reset(cls) -> None:
+        """
+        Reset the global DAGDecorator instance. Useful for testing or starting fresh.
+
+        :return: None
+        """
+        global _GLOBAL_DAG_INSTANCE
+        _GLOBAL_DAG_INSTANCE = None
+
+    @classmethod
+    def get_global_instance(cls) -> Optional["DAGDecorator"]:
+        """
+        Get the current global DAGDecorator instance.
+
+        :return: The global DAGDecorator instance or None if not initialized.
+        :rtype: DAGDecorator or None
+        """
+        return _GLOBAL_DAG_INSTANCE
 
 
 # TODO : Add the ability to read common attributes from a TOML file or something
