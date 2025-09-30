@@ -78,10 +78,10 @@ class Layer:
 
     :param name: Unique name for this layer
     :type name: str
-    :param function_name: Name of the function to execute
-    :type function_name: str
-    :param function_source: Source code of the function
-    :type function_source: Optional[str]
+    :param executable: Name of the function to execute
+    :type executable: str
+    :param exec_environment: Source code of the function
+    :type exec_environment: Optional[str]
     :param job_vars: List of variable dictionaries, one per job in this layer
     :type job_vars: List[Dict[str, Any]]
     :param inputs: Input data products
@@ -96,7 +96,8 @@ class Layer:
     :example:
     >>> layer = Layer(
     name="calibration",
-    function_name="calibrate_data",
+    executable="calibrate_data.py",
+    exec_environment='/path/to/container.sif',
     job_vars=[{"input_file": "raw1.ms"}, {"input_file": "raw2.ms"}],
     inputs=[DataProduct(name="raw1", file_path=Path("/data/raw1.ms"), data_type="MeasurementSet")],
     outputs=[DataProduct(name="calibrated1", file_path=Path("/data/calibrated1.ms"), data_type="MeasurementSet")],
@@ -104,17 +105,20 @@ class Layer:
     metadata={"description": "Calibration layer"}
     )
     >>> print(layer)
-    Layer(name='calibration', function_name='calibrate_data', function_source=None, job_vars=[{'input_file': 'raw1.ms'}, {'input_file': 'raw2.ms'}],
-        inputs=[DataProduct(name='raw1', file_path=PosixPath('/data/raw1.ms'), data_type='MeasurementSet', metadata={})],
-        outputs=[DataProduct(name='calibrated1', file_path=PosixPath('/data/calibrated1.ms'), data_type='MeasurementSet', metadata={})],
+    Layer(name='calibration', executable='calibrate_data.py', exec_environment='/path/to/container.sif',
+        job_vars=[{'input_file': 'raw1.ms'}, {'input_file': 'raw2.ms'}],
+        inputs=[DataProduct(name='raw1', file_path=PosixPath('/data/raw1.ms'),
+        data_type='MeasurementSet', metadata={})],
+        outputs=[DataProduct(name='calibrated1', file_path=PosixPath('/data/calibrated1.ms'),
+        data_type='MeasurementSet', metadata={})],
         submit_vars={'memory': '4GB', 'cpus': 2}, metadata={'description': 'Calibration layer'})
 
     :note: Layer instances are typically created and managed by the DAGGraph when building the workflow.
     """
 
     name: str
-    function_name: str
-    function_source: Optional[str] = None
+    executable: str
+    exec_environment: Optional[str] = None
 
     # Job variables - each dict represents one job in this layer
     job_vars: List[Dict[str, Any]] = field(default_factory=list)
@@ -138,8 +142,8 @@ class Layer:
         """
         return {
             "name": self.name,
-            "function_name": self.function_name,
-            "function_source": self.function_source,
+            "executable": self.executable,
+            "exec_environment": self.exec_environment,
             "job_vars": self.job_vars,
             "inputs": [inp.to_dict() for inp in self.inputs],
             "outputs": [out.to_dict() for out in self.outputs],
@@ -177,8 +181,8 @@ class DAGGraph:
 
     :example:
     >>> dag_graph = DAGGraph()
-    >>> layer1 = Layer(name="calibration", function_name="calibrate")
-    >>> layer2 = Layer(name="imaging", function_name="image")
+    >>> layer1 = Layer(name="calibration", executable="calibrate")
+    >>> layer2 = Layer(name="imaging", executable="image")
     >>> dag_graph.add_layer(layer1)
     >>> dag_graph.add_layer(layer2, parent_layers=["calibration"])
     >>> print(dag_graph.topological_order())
@@ -392,7 +396,7 @@ class DAGGraph:
 
         # Add nodes (layers)
         for layer_name, layer in self.layers.items():
-            label = f"{layer_name}\\n({layer.function_name})"
+            label = f"{layer_name}\\n({layer.executable})"
             if layer.job_vars:
                 label += f"\\n{len(layer.job_vars)} jobs"
             dot.node(layer_name, label=label, shape="box")
