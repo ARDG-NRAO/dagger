@@ -14,63 +14,6 @@ from typing import Any, Dict, Iterator, List, Optional, Set
 
 
 @dataclass
-class DataProduct:
-    """
-    Represents a data product (edge) in the DAG.
-
-    :param name: Unique identifier for this data product
-    :type name: str
-    :param file_path: Path to the data file
-    :type file_path: Optional[Path]
-    :param data_type: Type of data (e.g., "MeasurementSet", "FITS", "HDF5", arbitrary string)
-    :type data_type: Optional[str]
-    :param metadata: Additional metadata about the data product
-    :type metadata: Dict[str, Any]
-
-    :example:
-    >>> dp = DataProduct(name="calibrated_ms", file_path=Path("/data/calibrated.ms"), data_type="MeasurementSet")
-    >>> print(dp)
-    DataProduct(name='calibrated_ms', file_path=PosixPath('/data/calibrated.ms'), data_type='MeasurementSet', metadata={})
-
-    :note: DataProduct instances are typically created and managed by the DAGGraph when layers are added.
-    """
-
-    name: str
-    file_path: Optional[Path] = None
-    data_type: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict:
-        """
-        Serialize to dictionary.
-
-        :return: Dictionary representation
-        :rtype: dict
-        """
-        return {
-            "name": self.name,
-            "file_path": str(self.file_path) if self.file_path else None,
-            "data_type": self.data_type,
-            "metadata": self.metadata,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "DataProduct":
-        """
-        Deserialize from dictionary.
-
-        :param data: Dictionary representation
-        :type data: dict
-        :return: DataProduct instance
-        :rtype: DataProduct
-        """
-        data = data.copy()
-        if data.get("file_path"):
-            data["file_path"] = Path(data["file_path"])
-        return cls(**data)
-
-
-@dataclass
 class Layer:
     """
     Represents a computational layer (node) in the DAG.
@@ -78,16 +21,14 @@ class Layer:
 
     :param name: Unique name for this layer
     :type name: str
-    :param executable: Name of the function to execute
+    :param executable: Name of the function or path to executable
     :type executable: str
-    :param exec_environment: Source code of the function
-    :type exec_environment: Optional[str]
     :param job_vars: List of variable dictionaries, one per job in this layer
     :type job_vars: List[Dict[str, Any]]
     :param inputs: Input data products
-    :type inputs: List[DataProduct]
+    :type inputs: List
     :param outputs: Output data products
-    :type outputs: List[DataProduct]
+    :type outputs: List
     :param submit_vars: Backend-agnostic submit variables
     :type submit_vars: Dict[str, Any]
     :param metadata: Additional metadata
@@ -97,35 +38,32 @@ class Layer:
     >>> layer = Layer(
     name="calibration",
     executable="calibrate_data.py",
-    exec_environment='/path/to/container.sif',
     job_vars=[{"input_file": "raw1.ms"}, {"input_file": "raw2.ms"}],
-    inputs=[DataProduct(name="raw1", file_path=Path("/data/raw1.ms"), data_type="MeasurementSet")],
-    outputs=[DataProduct(name="calibrated1", file_path=Path("/data/calibrated1.ms"), data_type="MeasurementSet")],
-    submit_vars={"memory": "4GB", "cpus": 2},
+    inputs=["/data/raw1.ms"],
+    outputs=["/data/calibrated1.ms"],
+    submit_vars={"memory": "4GB", "cpus": 2, "container_image": "/path/to/container.sif"},
     metadata={"description": "Calibration layer"}
     )
     >>> print(layer)
-    Layer(name='calibration', executable='calibrate_data.py', exec_environment='/path/to/container.sif',
+    Layer(name='calibration', executable='calibrate_data.py',
         job_vars=[{'input_file': 'raw1.ms'}, {'input_file': 'raw2.ms'}],
-        inputs=[DataProduct(name='raw1', file_path=PosixPath('/data/raw1.ms'),
-        data_type='MeasurementSet', metadata={})],
-        outputs=[DataProduct(name='calibrated1', file_path=PosixPath('/data/calibrated1.ms'),
-        data_type='MeasurementSet', metadata={})],
-        submit_vars={'memory': '4GB', 'cpus': 2}, metadata={'description': 'Calibration layer'})
+        inputs="/data/raw1.ms",
+        outputs="/data/calibrated1.ms",
+        submit_vars={'memory': '4GB', 'cpus': 2}, container_image='/path/to/container.sif',
+        metadata={'description': 'Calibration layer'})
 
     :note: Layer instances are typically created and managed by the DAGGraph when building the workflow.
     """
 
     name: str
     executable: str
-    exec_environment: Optional[str] = None
 
     # Job variables - each dict represents one job in this layer
     job_vars: List[Dict[str, Any]] = field(default_factory=list)
 
     # Data products
-    inputs: List[DataProduct] = field(default_factory=list)
-    outputs: List[DataProduct] = field(default_factory=list)
+    inputs: List = field(default_factory=list)
+    outputs: List = field(default_factory=list)
 
     # Backend-agnostic submit variables
     submit_vars: Dict[str, Any] = field(default_factory=dict)
@@ -143,7 +81,6 @@ class Layer:
         return {
             "name": self.name,
             "executable": self.executable,
-            "exec_environment": self.exec_environment,
             "job_vars": self.job_vars,
             "inputs": [inp.to_dict() for inp in self.inputs],
             "outputs": [out.to_dict() for out in self.outputs],
@@ -161,10 +98,15 @@ class Layer:
         :return: Layer instance
         :rtype: Layer
         """
-        data = data.copy()
-        data["inputs"] = [DataProduct.from_dict(d) for d in data.get("inputs", [])]
-        data["outputs"] = [DataProduct.from_dict(d) for d in data.get("outputs", [])]
-        return cls(**data)
+        return cls(
+            name=data["name"],
+            executable=data["executable"],
+            job_vars=data.get("job_vars", []),
+            inputs=data["inputs"],
+            outputs=data["outputs"],
+            submit_vars=data.get("submit_vars", {}),
+            metadata=data.get("metadata", {}),
+        )
 
 
 class DAGGraph:

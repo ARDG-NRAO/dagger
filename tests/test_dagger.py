@@ -212,6 +212,146 @@ def test_error_handling():
             assert False, "Expected ValueError was not raised."
 
 
+# Tests for static decorator pattern
+def test_dagdecorator_static_initialize():
+    """Test DAGDecorator static initialize method."""
+    from dagger.dagger import DAGDecorator
+
+    # Reset global state
+    DAGDecorator.reset()
+    assert DAGDecorator.get_global_instance() is None
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        @DAGDecorator.initialize(dag_dir=temp_dir, dag_name="static_test")
+        def dummy_func():
+            pass
+
+        # Verify global instance was created
+        instance = DAGDecorator.get_global_instance()
+        assert instance is not None
+        assert instance.dag_name == "static_test"
+        assert instance.dag_dir == temp_dir
+
+        # Clean up
+        DAGDecorator.reset()
+
+
+def test_dagdecorator_static_layer():
+    """Test DAGDecorator static layer decorator."""
+    from dagger.dagger import DAGDecorator
+
+    # Reset global state
+    DAGDecorator.reset()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        @DAGDecorator.initialize(dag_dir=temp_dir, dag_name="static_layer_test")
+        def dummy_init():
+            pass
+
+        @DAGDecorator.layer(layer_name="test_layer")
+        def test_function():
+            """Test function for static decorator."""
+            return "test result"
+
+        # Verify the layer was added
+        instance = DAGDecorator.get_global_instance()
+        assert "test_layer" in instance.layer_list
+        assert "test_function" in instance.submit_functions
+
+        # Clean up
+        DAGDecorator.reset()
+
+
+def test_dagdecorator_static_write_dag():
+    """Test DAGDecorator static write_dag method."""
+    from dagger.dagger import DAGDecorator
+
+    # Reset global state
+    DAGDecorator.reset()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        @DAGDecorator.initialize(dag_dir=temp_dir, dag_name="static_write_test")
+        def dummy_init():
+            pass
+
+        @DAGDecorator.layer(layer_name="test_layer")
+        def test_function():
+            """Test function for write DAG."""
+            return "test result"
+
+        # Write the DAG
+        DAGDecorator.write_dag()
+
+        # Verify DAG file was created
+        dag_file = os.path.join(temp_dir, "static_write_test.dag")
+        assert os.path.exists(dag_file)
+
+        # Clean up
+        DAGDecorator.reset()
+
+
+def test_dagdecorator_static_error_handling():
+    """Test DAGDecorator static methods error handling."""
+    from dagger.dagger import DAGDecorator
+
+    # Reset global state
+    DAGDecorator.reset()
+
+    # Test layer decorator without initialization
+    try:
+        @DAGDecorator.layer(layer_name="test_layer")
+        def test_func():
+            pass
+    except RuntimeError as e:
+        assert "DAGDecorator.initialize() must be called" in str(e)
+    else:
+        assert False, "Expected RuntimeError was not raised."
+
+    # Test write_dag without initialization
+    try:
+        DAGDecorator.write_dag()
+    except RuntimeError as e:
+        assert "DAGDecorator.initialize() must be called" in str(e)
+    else:
+        assert False, "Expected RuntimeError was not raised."
+
+    # Clean up
+    DAGDecorator.reset()
+
+
+def test_dagdecorator_static_parent_layers():
+    """Test DAGDecorator static layer decorator with parent layers."""
+    from dagger.dagger import DAGDecorator
+
+    # Reset global state
+    DAGDecorator.reset()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        @DAGDecorator.initialize(dag_dir=temp_dir, dag_name="static_parent_test")
+        def dummy_init():
+            pass
+
+        @DAGDecorator.layer(layer_name="parent_layer")
+        def parent_function():
+            """Parent layer function."""
+            return "parent result"
+
+        @DAGDecorator.layer(layer_name="child_layer", parent_layer_name="parent_layer")
+        def child_function():
+            """Child layer function."""
+            return "child result"
+
+        # Verify both layers were added
+        instance = DAGDecorator.get_global_instance()
+        assert "parent_layer" in instance.layer_list
+        assert "child_layer" in instance.layer_list
+        assert "parent_function" in instance.submit_functions
+        assert "child_function" in instance.submit_functions
+
+        # Clean up
+        DAGDecorator.reset()
+
+
 def test_dagcorator_initialization():
     """Test Dagcorator class initialization."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -385,3 +525,143 @@ def test_dagcorator_error_handling():
             assert "does not exist in the DAG" in str(e)
         else:
             assert False, "Expected ValueError was not raised."
+
+
+# Tests for static decorator pattern
+def test_dagdecorator_static_initialize():
+    """Test DAGDecorator static initialize method."""
+    from dagger.dagger import DAGDecorator
+
+    # Reset global state
+    DAGDecorator.reset()
+    assert DAGDecorator.get_global_instance() is None
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        @DAGDecorator.initialize(dag_dir=temp_dir, dag_name="static_test")
+        def dummy_func():
+            pass
+
+        # Verify global instance was created
+        instance = DAGDecorator.get_global_instance()
+        assert instance is not None
+        assert instance.dag_name == "static_test"
+        assert instance.dag_dir == temp_dir
+
+        # Clean up
+        DAGDecorator.reset()
+
+
+def test_dagdecorator_static_layer():
+    """Test DAGDecorator static layer decorator."""
+    from dagger.dagger import DAGDecorator
+
+    # Reset global state
+    DAGDecorator.reset()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        @DAGDecorator.initialize(dag_dir=temp_dir, dag_name="static_layer_test")
+        def dummy_init():
+            pass
+
+        @DAGDecorator.layer(layer_name="test_layer")
+        def test_function():
+            """Test function for static decorator."""
+            return "test result"
+
+        # Verify the layer was added
+        instance = DAGDecorator.get_global_instance()
+        assert "test_layer" in instance.layer_list
+        assert "test_function" in instance.submit_functions
+
+        # Clean up
+        DAGDecorator.reset()
+
+
+def test_dagdecorator_static_write_dag():
+    """Test DAGDecorator static write_dag method."""
+    from dagger.dagger import DAGDecorator
+
+    # Reset global state
+    DAGDecorator.reset()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        @DAGDecorator.initialize(dag_dir=temp_dir, dag_name="static_write_test")
+        def dummy_init():
+            pass
+
+        @DAGDecorator.layer(layer_name="test_layer")
+        def test_function():
+            """Test function for write DAG."""
+            return "test result"
+
+        # Write the DAG
+        DAGDecorator.write_dag()
+
+        # Verify DAG file was created
+        dag_file = os.path.join(temp_dir, "static_write_test.dag")
+        assert os.path.exists(dag_file)
+
+        # Clean up
+        DAGDecorator.reset()
+
+
+def test_dagdecorator_static_error_handling():
+    """Test DAGDecorator static methods error handling."""
+    from dagger.dagger import DAGDecorator
+
+    # Reset global state
+    DAGDecorator.reset()
+
+    # Test layer decorator without initialization
+    try:
+        @DAGDecorator.layer(layer_name="test_layer")
+        def test_func():
+            pass
+    except RuntimeError as e:
+        assert "DAGDecorator.initialize() must be called" in str(e)
+    else:
+        assert False, "Expected RuntimeError was not raised."
+
+    # Test write_dag without initialization
+    try:
+        DAGDecorator.write_dag()
+    except RuntimeError as e:
+        assert "DAGDecorator.initialize() must be called" in str(e)
+    else:
+        assert False, "Expected RuntimeError was not raised."
+
+    # Clean up
+    DAGDecorator.reset()
+
+
+def test_dagdecorator_static_parent_layers():
+    """Test DAGDecorator static layer decorator with parent layers."""
+    from dagger.dagger import DAGDecorator
+
+    # Reset global state
+    DAGDecorator.reset()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        @DAGDecorator.initialize(dag_dir=temp_dir, dag_name="static_parent_test")
+        def dummy_init():
+            pass
+
+        @DAGDecorator.layer(layer_name="parent_layer")
+        def parent_function():
+            """Parent layer function."""
+            return "parent result"
+
+        @DAGDecorator.layer(layer_name="child_layer", parent_layer_name="parent_layer")
+        def child_function():
+            """Child layer function."""
+            return "child result"
+
+        # Verify both layers were added
+        instance = DAGDecorator.get_global_instance()
+        assert "parent_layer" in instance.layer_list
+        assert "child_layer" in instance.layer_list
+        assert "parent_function" in instance.submit_functions
+        assert "child_function" in instance.submit_functions
+
+        # Clean up
+        DAGDecorator.reset()
