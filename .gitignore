@@ -178,3 +178,6 @@ cython_debug/
 CLAUDE.md
 AGENTS.md
 .claude
+
+# ReadTheDocs files
+generated

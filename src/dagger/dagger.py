@@ -10,13 +10,15 @@ from typing import Optional
 import htcondor2
 from htcondor2 import dags
 
+from dag_graph import DAGGraph, Layer
+
 # Module-level state for static decorator pattern
 _GLOBAL_DAG_INSTANCE: Optional["DAGDecorator"] = None
 
 
-class DagBuilderBase:
+class DAGBuilderCondor(DAGGraph):
     """
-    Base class for building DAGs. This class contains the core DAG-building
+    Base class for building DAGs for HTCondor. This class contains the core DAG-building
     functionality without any user-facing concerns like directory management.
     It provides low-level methods for function parsing, submit object creation,
     and DAG layer management.
